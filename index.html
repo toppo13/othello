@@ -2,29 +2,40 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>オセロ</title>
   <style>
     body {
-    text-align: center;
-    font-family: sans-serif;
-    margin: 20px;
+      text-align: center;
+      font-family: sans-serif;
+      margin: 20px;
     }
-    canvas {
-      border: 2px solid #333;
-      display: none;
-      margin: 20px auto;
-      touch-action: manipulation;
-      max-width: 90vw;
-      height: auto;
+canvas {
+  background-color: #3CB371;
+  border: 4px solid #333;
+  border-radius: 10px;
+  touch-action: manipulation;
+  display: none;
+  max-width: 90vw;
+  height: auto;
+  margin: 0 auto; /* ←これを追加して中央揃え */
+}
+    #info, #message {
+      margin-top: 10px;
+      font-size: 18px;
     }
-
-
-
-    #info, #message { margin-top: 10px; font-size: 18px; }
-    #message { color: red; height: 24px; }
-    #startScreen, #restartBtn { margin-top: 20px; }
-    button { font-size: 20px; padding: 10px 20px; cursor: pointer; }
+    #message {
+      color: red;
+      height: 24px;
+    }
+    #startScreen, #restartBtn {
+      margin-top: 20px;
+    }
+    button {
+      font-size: 20px;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -38,16 +49,12 @@
   <div>
     <button id="restartBtn" style="display:none;">リスタート</button>
   </div>
+
 <script>
 const canvas = document.getElementById("board");
-// 画面幅に応じてキャンバスのサイズを調整
-const screenSize = Math.min(window.innerWidth, window.innerHeight) * 0.9; // 画面の90%以内
-canvas.width = screenSize;
-canvas.height = screenSize;
-
 const ctx = canvas.getContext("2d");
 const size = 8;
-const cell = canvas.width / size;
+let cell;
 let board;
 let current;
 let lastCpuMove;
@@ -62,7 +69,21 @@ const startScreen = document.getElementById("startScreen");
 const startBtn = document.getElementById("startBtn");
 const restartBtn = document.getElementById("restartBtn");
 
+function resizeCanvas() {
+  const minSize = Math.min(window.innerWidth * 0.9, 400);
+  canvas.width = minSize;
+  canvas.height = minSize;
+  cell = canvas.width / size;
+}
+window.addEventListener("resize", () => {
+  if (canvas.style.display === "block") {
+    resizeCanvas();
+    drawBoard();
+  }
+});
+
 function initGame() {
+  resizeCanvas();
   board = Array.from({ length: size }, () => Array(size).fill(0));
   board[3][3] = -1;
   board[4][4] = -1;
@@ -106,7 +127,7 @@ function drawBoard() {
     for (const [x, y] of moves) {
       ctx.beginPath();
       ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.15, 0, Math.PI * 2);
-      ctx.fillStyle = "yellow";
+      ctx.fillStyle = "yellow";  // 見やすい配置可能マーク
       ctx.fill();
     }
   }
@@ -174,7 +195,6 @@ function cpuMove() {
 function switchTurn() {
   current = -current;
   messageDiv.textContent = "";
-
   if (!hasValidMove(current)) {
     current = -current;
     if (!hasValidMove(current)) return endGame();
@@ -187,8 +207,9 @@ function switchTurn() {
 
 canvas.addEventListener("click", e => {
   if (current !== 1) return;
-  const x = Math.floor(e.offsetX / cell);
-  const y = Math.floor(e.offsetY / cell);
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / cell);
+  const y = Math.floor((e.clientY - rect.top) / cell);
   if (!validMove(x, y, 1)) {
     messageDiv.textContent = "そこには置けません。";
     return;
@@ -222,7 +243,6 @@ restartBtn.addEventListener("click", () => {
   messageDiv.textContent = "";
   initGame();
 });
-
 </script>
 </body>
 </html>
