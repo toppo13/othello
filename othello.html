@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>オセロ</title>
+  <style>
+    body {
+    text-align: center;
+    font-family: sans-serif;
+    margin: 20px;
+    }
+    canvas {
+    border: 2px solid #333;
+    margin: 20px auto;
+    display: none;
+    touch-action: manipulation;
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.3); /* 影で少し浮き出る */
+    background-color: #228B22; /* 盤面っぽい緑背景 */
+    border-radius: 8px; /* 角丸 */
+    }
+
+
+    #info, #message { margin-top: 10px; font-size: 18px; }
+    #message { color: red; height: 24px; }
+    #startScreen, #restartBtn { margin-top: 20px; }
+    button { font-size: 20px; padding: 10px 20px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>オセロ</h1>
+  <div id="startScreen">
+    <button id="startBtn">ゲームスタート</button>
+  </div>
+  <canvas id="board" width="400" height="400"></canvas>
+  <div id="info"></div>
+  <div id="message"></div>
+  <div>
+    <button id="restartBtn" style="display:none;">リスタート</button>
+  </div>
+<script>
+const canvas = document.getElementById("board");
+const ctx = canvas.getContext("2d");
+const size = 8;
+const cell = canvas.width / size;
+let board;
+let current;
+let lastCpuMove;
+let directions = [
+  [-1, 0], [1, 0], [0, -1], [0, 1],
+  [-1, -1], [-1, 1], [1, -1], [1, 1]
+];
+
+const infoDiv = document.getElementById("info");
+const messageDiv = document.getElementById("message");
+const startScreen = document.getElementById("startScreen");
+const startBtn = document.getElementById("startBtn");
+const restartBtn = document.getElementById("restartBtn");
+
+function initGame() {
+  board = Array.from({ length: size }, () => Array(size).fill(0));
+  board[3][3] = -1;
+  board[4][4] = -1;
+  board[3][4] = 1;
+  board[4][3] = 1;
+  current = 1; // 黒からスタート
+  lastCpuMove = null;
+  messageDiv.textContent = "";
+  infoDiv.textContent = "黒の番です";
+  drawBoard();
+}
+
+function drawBoard() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#000";
+  for (let i = 0; i <= size; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * cell, 0);
+    ctx.lineTo(i * cell, canvas.height);
+    ctx.moveTo(0, i * cell);
+    ctx.lineTo(canvas.width, i * cell);
+    ctx.stroke();
+  }
+  if (lastCpuMove) {
+    ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+    ctx.fillRect(lastCpuMove[0] * cell, lastCpuMove[1] * cell, cell, cell);
+  }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (board[y][x] !== 0) {
+        ctx.beginPath();
+        ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = board[y][x] === 1 ? "black" : "white";
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+  }
+  if (current === 1) {
+    let moves = getValidMoves(1);
+    for (const [x, y] of moves) {
+      ctx.beginPath();
+      ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.15, 0, Math.PI * 2);
+      ctx.fillStyle = "yellow";
+      ctx.fill();
+    }
+  }
+}
+
+function validMove(x, y, color) {
+  if (board[y][x] !== 0) return false;
+  for (const [dx, dy] of directions) {
+    let nx = x + dx, ny = y + dy, flipped = 0;
+    while (board[ny]?.[nx] === -color) {
+      nx += dx; ny += dy; flipped++;
+    }
+    if (flipped > 0 && board[ny]?.[nx] === color) return true;
+  }
+  return false;
+}
+
+function flip(x, y, color) {
+  for (const [dx, dy] of directions) {
+    let nx = x + dx, ny = y + dy, path = [];
+    while (board[ny]?.[nx] === -color) {
+      path.push([nx, ny]);
+      nx += dx; ny += dy;
+    }
+    if (path.length > 0 && board[ny]?.[nx] === color) {
+      for (const [fx, fy] of path) {
+        board[fy][fx] = color;
+      }
+    }
+  }
+}
+
+function getValidMoves(color) {
+  let moves = [];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (validMove(x, y, color)) moves.push([x, y]);
+    }
+  }
+  return moves;
+}
+
+function hasValidMove(color) {
+  return getValidMoves(color).length > 0;
+}
+
+function cpuMove() {
+  const moves = getValidMoves(-1);
+  if (moves.length === 0) {
+    switchTurn();
+    return;
+  }
+  const badMoves = moves.filter(([x, y]) => !(x === 0 || x === 7) && !(y === 0 || y === 7));
+  const move = badMoves.length > 0
+    ? badMoves[Math.floor(Math.random() * badMoves.length)]
+    : moves[Math.floor(Math.random() * moves.length)];
+  const [x, y] = move;
+  board[y][x] = -1;
+  flip(x, y, -1);
+  lastCpuMove = [x, y];
+  switchTurn();
+  drawBoard();
+}
+
+function switchTurn() {
+  current = -current;
+  messageDiv.textContent = "";
+
+  if (!hasValidMove(current)) {
+    current = -current;
+    if (!hasValidMove(current)) return endGame();
+  }
+  infoDiv.textContent = current === 1 ? "黒の番です" : "白の番です";
+  if (current === -1) {
+    setTimeout(cpuMove, 500);
+  }
+}
+
+canvas.addEventListener("click", e => {
+  if (current !== 1) return;
+  const x = Math.floor(e.offsetX / cell);
+  const y = Math.floor(e.offsetY / cell);
+  if (!validMove(x, y, 1)) {
+    messageDiv.textContent = "そこには置けません。";
+    return;
+  }
+  board[y][x] = 1;
+  flip(x, y, 1);
+  lastCpuMove = null;
+  switchTurn();
+  drawBoard();
+});
+
+function endGame() {
+  const flat = board.flat();
+  const black = flat.filter(c => c === 1).length;
+  const white = flat.filter(c => c === -1).length;
+  const result = black > white ? "あなたの勝ち！🎉" : white > black ? "白の勝ち！" : "引き分け！";
+  infoDiv.textContent = `終了：${result} 黒${black} - 白${white}`;
+  messageDiv.textContent = "";
+  restartBtn.style.display = "inline-block";
+}
+
+startBtn.addEventListener("click", () => {
+  startScreen.style.display = "none";
+  canvas.style.display = "block";
+  restartBtn.style.display = "none";
+  initGame();
+});
+
+restartBtn.addEventListener("click", () => {
+  restartBtn.style.display = "none";
+  messageDiv.textContent = "";
+  initGame();
+});
+
+</script>
+</body>
+</html>
