@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>オセロ</title>
   <style>
     body {
@@ -10,16 +10,16 @@
       font-family: sans-serif;
       margin: 20px;
     }
-canvas {
-  background-color: #3CB371;
-  border: 4px solid #333;
-  border-radius: 10px;
-  touch-action: manipulation;
-  display: none;
-  max-width: 90vw;
-  height: auto;
-  margin: 0 auto; /* ←これを追加して中央揃え */
-}
+    canvas {
+      background-color: #3CB371;
+      border: 4px solid #333;
+      border-radius: 10px;
+      touch-action: manipulation;
+      display: none;
+      max-width: 90vw;
+      height: auto;
+      margin: 0 auto;
+    }
     #info, #message {
       margin-top: 10px;
       font-size: 18px;
@@ -36,11 +36,25 @@ canvas {
       padding: 10px 20px;
       cursor: pointer;
     }
+    select {
+      font-size: 18px;
+      margin-left: 10px;
+      padding: 5px;
+    }
   </style>
 </head>
 <body>
   <h1>オセロ</h1>
   <div id="startScreen">
+    モードを選択：
+    <select id="cpuLevelSelect">
+      <option value="0">対人戦</option>
+      <option value="1">CPU(レベル1)</option>
+      <option value="2">CPU(レベル2)</option>
+      <option value="3">CPU(レベル3)</option>
+      <option value="4">CPU(レベル4)</option>
+    </select>
+    <br><br>
     <button id="startBtn">ゲームスタート</button>
   </div>
   <canvas id="board"></canvas>
@@ -58,7 +72,7 @@ let cell;
 let board;
 let current;
 let lastCpuMove;
-let directions = [
+const directions = [
   [-1, 0], [1, 0], [0, -1], [0, 1],
   [-1, -1], [-1, 1], [1, -1], [1, 1]
 ];
@@ -68,6 +82,9 @@ const messageDiv = document.getElementById("message");
 const startScreen = document.getElementById("startScreen");
 const startBtn = document.getElementById("startBtn");
 const restartBtn = document.getElementById("restartBtn");
+const cpuLevelSelect = document.getElementById("cpuLevelSelect");
+
+let cpuLevel = 0; // 0=対人戦, 1-4 CPUレベル
 
 function resizeCanvas() {
   const minSize = Math.min(window.innerWidth * 0.9, 400);
@@ -92,8 +109,15 @@ function initGame() {
   current = 1; // 黒からスタート
   lastCpuMove = null;
   messageDiv.textContent = "";
-  infoDiv.textContent = "黒の番です";
+  infoDiv.textContent = cpuLevel === 0
+    ? "黒の番です（対人戦）"
+    : "黒の番です（CPUレベル" + cpuLevel + "）";
   drawBoard();
+
+  // CPUが黒（current===1）で動く設定も考慮（今はCPUは白側のみ想定）
+  if (cpuLevel !== 0 && current === -1) {
+    setTimeout(cpuMove, 500);
+  }
 }
 
 function drawBoard() {
@@ -122,12 +146,13 @@ function drawBoard() {
       }
     }
   }
-  if (current === 1) {
-    let moves = getValidMoves(1);
+  // 有効手の表示は人間の番の場合のみ
+  if ((current === 1) || (current === -1 && cpuLevel === 0)) {
+    let moves = getValidMoves(current);
     for (const [x, y] of moves) {
       ctx.beginPath();
       ctx.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.15, 0, Math.PI * 2);
-      ctx.fillStyle = "yellow";  // 見やすい配置可能マーク
+      ctx.fillStyle = "yellow";
       ctx.fill();
     }
   }
@@ -160,11 +185,36 @@ function flip(x, y, color) {
   }
 }
 
-function getValidMoves(color) {
+function flipOnBoard(boardState, x, y, color) {
+  for (const [dx, dy] of directions) {
+    let nx = x + dx, ny = y + dy, path = [];
+    while (boardState[ny]?.[nx] === -color) {
+      path.push([nx, ny]);
+      nx += dx; ny += dy;
+    }
+    if (path.length > 0 && boardState[ny]?.[nx] === color) {
+      for (const [fx, fy] of path) {
+        boardState[fy][fx] = color;
+      }
+    }
+  }
+}
+
+function getValidMoves(color, b = board) {
   let moves = [];
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      if (validMove(x, y, color)) moves.push([x, y]);
+      if (b[y][x] !== 0) continue;
+      for (const [dx, dy] of directions) {
+        let nx = x + dx, ny = y + dy, flipped = 0;
+        while (b[ny]?.[nx] === -color) {
+          nx += dx; ny += dy; flipped++;
+        }
+        if (flipped > 0 && b[ny]?.[nx] === color) {
+          moves.push([x, y]);
+          break;
+        }
+      }
     }
   }
   return moves;
@@ -174,48 +224,40 @@ function hasValidMove(color) {
   return getValidMoves(color).length > 0;
 }
 
-function cpuMove() {
-  const moves = getValidMoves(-1);
-  if (moves.length === 0) {
-    switchTurn();
-    return;
-  }
-  const badMoves = moves.filter(([x, y]) => !(x === 0 || x === 7) && !(y === 0 || y === 7));
-  const move = badMoves.length > 0
-    ? badMoves[Math.floor(Math.random() * badMoves.length)]
-    : moves[Math.floor(Math.random() * moves.length)];
-  const [x, y] = move;
-  board[y][x] = -1;
-  flip(x, y, -1);
-  lastCpuMove = [x, y];
-  switchTurn();
-  drawBoard();
-}
-
 function switchTurn() {
   current = -current;
   messageDiv.textContent = "";
+
   if (!hasValidMove(current)) {
     current = -current;
     if (!hasValidMove(current)) return endGame();
+    messageDiv.textContent = "パスしました。";
   }
-  infoDiv.textContent = current === 1 ? "黒の番です" : "白の番です";
-  if (current === -1) {
+
+  infoDiv.textContent = current === 1
+    ? "黒の番です" + (cpuLevel === 0 ? "（対人戦）" : "（CPUレベル" + cpuLevel + "）")
+    : "白の番です" + (cpuLevel === 0 ? "（対人戦）" : "（CPUレベル" + cpuLevel + "）");
+
+  drawBoard();
+
+  if (cpuLevel !== 0 && current === -1) {
     setTimeout(cpuMove, 500);
   }
 }
 
 canvas.addEventListener("click", e => {
-  if (current !== 1) return;
+  // CPUのターンはクリック禁止
+  if (cpuLevel !== 0 && current === -1) return;
+
   const rect = canvas.getBoundingClientRect();
   const x = Math.floor((e.clientX - rect.left) / cell);
   const y = Math.floor((e.clientY - rect.top) / cell);
-  if (!validMove(x, y, 1)) {
+  if (!validMove(x, y, current)) {
     messageDiv.textContent = "そこには置けません。";
     return;
   }
-  board[y][x] = 1;
-  flip(x, y, 1);
+  board[y][x] = current;
+  flip(x, y, current);
   lastCpuMove = null;
   switchTurn();
   drawBoard();
@@ -225,13 +267,195 @@ function endGame() {
   const flat = board.flat();
   const black = flat.filter(c => c === 1).length;
   const white = flat.filter(c => c === -1).length;
-  const result = black > white ? "あなたの勝ち！🎉" : white > black ? "白の勝ち！" : "引き分け！";
+  const result = black > white ? "黒の勝ち！🎉" : white > black ? "白の勝ち！🎉" : "引き分け！";
   infoDiv.textContent = `終了：${result} 黒${black} - 白${white}`;
   messageDiv.textContent = "";
   restartBtn.style.display = "inline-block";
 }
 
+// 評価関数（駒差＋角優先＋辺優先）
+const weights = [
+  [120, -20, 20, 5, 5, 20, -20, 120],
+  [-20, -40, -5, -5, -5, -5, -40, -20],
+  [20, -5, 15, 3, 3, 15, -5, 20],
+  [5, -5, 3, 3, 3, 3, -5, 5],
+  [5, -5, 3, 3, 3, 3, -5, 5],
+  [20, -5, 15, 3, 3, 15, -5, 20],
+  [-20, -40, -5, -5, -5, -5, -40, -20],
+  [120, -20, 20, 5, 5, 20, -20, 120]
+];
+
+function evaluate(boardState) {
+  let score = 0;
+  for (let y=0; y<size; y++) {
+    for (let x=0; x<size; x++) {
+      if (boardState[y][x] === -1) score += weights[y][x];
+      else if (boardState[y][x] === 1) score -= weights[y][x];
+    }
+  }
+  return score;
+}
+
+// CPUレベル1: 最も評価値が低い（自分にとって最悪の）手をランダムに選ぶ（必ず負ける方向）
+function cpuMoveLevel1() {
+  const moves = getValidMoves(-1);
+  if (moves.length === 0) {
+    switchTurn();
+    return;
+  }
+  let worstScore = Infinity;
+  let worstMoves = [];
+  for (const [x, y] of moves) {
+    let copy = board.map(r => [...r]);
+    copy[y][x] = -1;
+    flipOnBoard(copy, x, y, -1);
+    let score = evaluate(copy);
+    if (score < worstScore) {
+      worstScore = score;
+      worstMoves = [[x, y]];
+    } else if (score === worstScore) {
+      worstMoves.push([x, y]);
+    }
+  }
+  const choice = worstMoves[Math.floor(Math.random() * worstMoves.length)];
+  const [x, y] = choice;
+  board[y][x] = -1;
+  flip(x, y, -1);
+  lastCpuMove = [x, y];
+  switchTurn();
+  drawBoard();
+}
+
+// CPUレベル2: 評価関数で最もスコアの高い手を選ぶ
+function cpuMoveLevel2() {
+  const moves = getValidMoves(-1);
+  if (moves.length === 0) {
+    switchTurn();
+    return;
+  }
+  let bestScore = -Infinity;
+  let bestMove = null;
+  for (const [x, y] of moves) {
+    let copy = board.map(r => [...r]);
+    copy[y][x] = -1;
+    flipOnBoard(copy, x, y, -1);
+    let score = evaluate(copy);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = [x, y];
+    }
+  }
+  const [x, y] = bestMove;
+  board[y][x] = -1;
+  flip(x, y, -1);
+  lastCpuMove = [x, y];
+  switchTurn();
+  drawBoard();
+}
+
+// CPUレベル3: Minimax深さ3, αβ枝刈り付き
+function minimax(boardState, depth, alpha, beta, maximizingPlayer) {
+  if (depth === 0) return evaluate(boardState);
+  const color = maximizingPlayer ? -1 : 1;
+  const moves = getValidMoves(color, boardState);
+  if (moves.length === 0) {
+    // パス処理
+    const oppMoves = getValidMoves(-color, boardState);
+    if (oppMoves.length === 0) return evaluate(boardState); // 終了局面
+    return minimax(boardState, depth - 1, alpha, beta, !maximizingPlayer);
+  }
+  if (maximizingPlayer) {
+    let maxEval = -Infinity;
+    for (const [x, y] of moves) {
+      let copy = boardState.map(r => [...r]);
+      copy[y][x] = color;
+      flipOnBoard(copy, x, y, color);
+      let evalScore = minimax(copy, depth - 1, alpha, beta, false);
+      maxEval = Math.max(maxEval, evalScore);
+      alpha = Math.max(alpha, evalScore);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const [x, y] of moves) {
+      let copy = boardState.map(r => [...r]);
+      copy[y][x] = color;
+      flipOnBoard(copy, x, y, color);
+      let evalScore = minimax(copy, depth - 1, alpha, beta, true);
+      minEval = Math.min(minEval, evalScore);
+      beta = Math.min(beta, evalScore);
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  }
+}
+
+function cpuMoveLevel3() {
+  const moves = getValidMoves(-1);
+  if (moves.length === 0) {
+    switchTurn();
+    return;
+  }
+  let bestScore = -Infinity;
+  let bestMove = null;
+  for (const [x, y] of moves) {
+    let copy = board.map(r => [...r]);
+    copy[y][x] = -1;
+    flipOnBoard(copy, x, y, -1);
+    let score = minimax(copy, 3, -Infinity, Infinity, false);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = [x, y];
+    }
+  }
+  const [x, y] = bestMove;
+  board[y][x] = -1;
+  flip(x, y, -1);
+  lastCpuMove = [x, y];
+  switchTurn();
+  drawBoard();
+}
+
+// CPUレベル4: Minimax深さ4, αβ枝刈り付き
+function cpuMoveLevel4() {
+  const moves = getValidMoves(-1);
+  if (moves.length === 0) {
+    switchTurn();
+    return;
+  }
+  let bestScore = -Infinity;
+  let bestMove = null;
+  for (const [x, y] of moves) {
+    let copy = board.map(r => [...r]);
+    copy[y][x] = -1;
+    flipOnBoard(copy, x, y, -1);
+    let score = minimax(copy, 4, -Infinity, Infinity, false);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = [x, y];
+    }
+  }
+  const [x, y] = bestMove;
+  board[y][x] = -1;
+  flip(x, y, -1);
+  lastCpuMove = [x, y];
+  switchTurn();
+  drawBoard();
+}
+
+function cpuMove() {
+  switch(cpuLevel) {
+    case 1: cpuMoveLevel1(); break;
+    case 2: cpuMoveLevel2(); break;
+    case 3: cpuMoveLevel3(); break;
+    case 4: cpuMoveLevel4(); break;
+    default: break;
+  }
+}
+
 startBtn.addEventListener("click", () => {
+  cpuLevel = parseInt(cpuLevelSelect.value, 10);
   startScreen.style.display = "none";
   canvas.style.display = "block";
   restartBtn.style.display = "none";
@@ -240,9 +464,9 @@ startBtn.addEventListener("click", () => {
 
 restartBtn.addEventListener("click", () => {
   restartBtn.style.display = "none";
-  messageDiv.textContent = "";
   initGame();
 });
+
 </script>
 </body>
 </html>
