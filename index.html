@@ -44,6 +44,8 @@
   </style>
 </head>
 <body>
+  <audio id="bgm" src="bgm.mp3" loop autoplay></audio>
+  <audio id="stoneSound" src="stone.mp3"></audio>
   <h1>オセロ</h1>
   <div id="startScreen">
     モードを選択：
@@ -56,6 +58,9 @@
     </select>
     <br><br>
     <button id="startBtn">ゲームスタート</button>
+    <br><br>
+    <button onclick="document.getElementById('bgm').play()">♪ BGMを再生</button>
+
   </div>
   <canvas id="board"></canvas>
   <div id="info"></div>
@@ -260,6 +265,11 @@ canvas.addEventListener("click", e => {
   flip(x, y, current);
   lastCpuMove = null;
   switchTurn();
+  // すでにある関数の中の「石を置いた直後」に追加
+const stoneSound = document.getElementById("stoneSound");
+stoneSound.currentTime = 0;
+stoneSound.play();
+
   drawBoard();
 });
 
@@ -463,8 +473,15 @@ startBtn.addEventListener("click", () => {
 });
 
 restartBtn.addEventListener("click", () => {
-  restartBtn.style.display = "none";
-  initGame();
+  canvas.style.display = "none";          // 盤面を隠す
+  startScreen.style.display = "block";    // モード選択を表示
+  restartBtn.style.display = "none";      // リスタートボタンを隠す
+});
+
+
+window.addEventListener("DOMContentLoaded", () => {
+  const bgm = document.getElementById("bgm");
+  bgm.volume = 0.1; // ここで音量を下げる
 });
 
 </script>
